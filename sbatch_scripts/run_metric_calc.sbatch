@@ -6,7 +6,7 @@
 #
 # Creation Date : 11-01-2021
 #
-# Last Modified : Mon 11 Jan 2021 10:28:23 AM PST
+# Last Modified : Fri 15 Jan 2021 11:59:41 AM PST
 #
 # Created By : Rob Bierman
 #
@@ -18,10 +18,10 @@
 #                                                       #
 #########################################################
 #Single commented out SBATCH are active, more than that is inactive
-#SBATCH -p horence                          # which node to run on
-#SBATCH --time=48:00:00                     # how much time to run
+#SBATCH -p owners # which node to run on
+#SBATCH --time=16:00:00                     # how much time to run
 #SBATCH --mem=45000                         # how much mem in MBs
-#SBATCH --job-name=pol
+#SBATCH --job-name=periph
 
 
 #########################################################
@@ -42,8 +42,8 @@
 python3 ../scripts/spatial_utils.py \
     --cells ../processed_data/segmented_cell_shapes.csv \
     --spots ../processed_data/all_passing_rna_spots.csv \
-    --out 20210111_polarity.csv \
-    --metric polarity \
+    --out 20210115_periphery \
+    --metric periphery \
 
 
 

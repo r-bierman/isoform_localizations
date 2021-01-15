@@ -333,7 +333,6 @@ if __name__ == '__main__':
     parser.add_argument('--zslice',dest='zslice', help='which zslice to restrict to, if any', required=False)
 
     args = parser.parse_args()
-    print(args)
 
     metric_func = metrics[args.metric]
 
