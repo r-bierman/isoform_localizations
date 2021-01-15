@@ -237,7 +237,7 @@ if __name__ == '__main__':
     parser.add_argument('--out',dest='out_path', help='path to save metric output', required=True)
     parser.add_argument('--metric',dest='metric', help='which metric to run', choices=metrics.keys(), required=True)
     parser.add_argument('--sample',dest='sample', help='which sample to restrict to, if any', required=False)
-    parser.add_argument('--zslice',dest='zslice', help='which zslice to restrict to, if any', required=False)
+    parser.add_argument('--zslice',dest='metric', help='which zslice to restrict to, if any', required=False)
 
     args = parser.parse_args()
 
@@ -245,17 +245,6 @@ if __name__ == '__main__':
 
     spots = pd.read_csv(args.spots_path)
     cells = pd.read_csv(args.cells_path)
-
-    if args.sample:
-        spots = spots[spots['sample'].eq(args.sample)]
-    if args.zslice:
-        spots = spots[spots['global_z'].eq(float(args.zslice))]
-
-    #Limit to cells that have at least one spot
-    cells = cells[cells['cell_id'].isin(spots['cell_id'].unique())]
-
-    print(spots.shape)
-    print(cells.shape)
 
     out_df = metric_func(spots, cells)
     out_df['spatial_utils_code_version'] = code_version

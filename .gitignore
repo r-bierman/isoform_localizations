@@ -4,6 +4,7 @@ protein_atlas_subcellular_data/
 processed_data/
 *.csv
 slurm*
+*.gtf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

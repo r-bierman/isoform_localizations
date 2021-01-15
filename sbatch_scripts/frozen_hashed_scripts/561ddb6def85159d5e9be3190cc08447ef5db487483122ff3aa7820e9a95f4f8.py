@@ -249,13 +249,10 @@ if __name__ == '__main__':
     if args.sample:
         spots = spots[spots['sample'].eq(args.sample)]
     if args.zslice:
-        spots = spots[spots['global_z'].eq(float(args.zslice))]
+        spots = spots[spots['global_z'].eq(args.zslice)]
 
     #Limit to cells that have at least one spot
     cells = cells[cells['cell_id'].isin(spots['cell_id'].unique())]
-
-    print(spots.shape)
-    print(cells.shape)
 
     out_df = metric_func(spots, cells)
     out_df['spatial_utils_code_version'] = code_version
