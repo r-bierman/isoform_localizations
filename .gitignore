@@ -5,6 +5,10 @@ processed_data/
 *.csv
 slurm*
 *.gtf
+*.pdf
+bin/
+lib/
+lib64
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

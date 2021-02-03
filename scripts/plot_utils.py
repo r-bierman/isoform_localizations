@@ -16,10 +16,7 @@ def plot_spot_cells(spots, cells, spot_colors='k', spot_size=0.05):
 
         ax = _add_spots(ax, spot_g, color=spot_colors, size=spot_size)
 
-        plt.title(cell_id)
-        plt.show()
-        plt.close()
-
+        yield fig,ax
         
 
 def _add_spots(ax, spots, color='r', size=0.2):

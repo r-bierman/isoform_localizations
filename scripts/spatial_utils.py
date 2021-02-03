@@ -7,7 +7,7 @@ import functools
 import hashlib
 import shutil
 
-import shapely
+import shapely.wkt
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -199,26 +199,9 @@ def spatial_metric_periphery(spots,cells):
     #Calculate num_cell_spots and num_gene_spots
     spots = calculate_spots_per_cell(spots)
 
-    #Create a shapely.poly object for each cell
-    cells['poly'] = cells.apply(lambda r: create_shapely_boundary(r['boundaryX'],r['boundaryY']), axis=1)
-
-    #Add the poly object to each row in spots
-    cell_id_to_poly = cells.set_index('cell_id')['poly']
-    spots['poly'] = spots['cell_id'].map(cell_id_to_poly)
-
-    #Calculate min boundary dists for each spot
-    def calculate_min_boundary_dist(poly,px,py):
-        pt = shapely.wkt.loads('POINT({} {})'.format(px,py))
-        return poly.boundary.distance(pt)
-
-    spots['raw_metric'] = (
-        spots.apply(
-            lambda r: calculate_min_boundary_dist(
-                r['poly'], 
-                r['global_x'],
-                r['global_y']),
-            axis=1)
-    )
+    #Calculate spot to boundary min dist
+    spots = calculate_spot_to_boundary_min_dist(spots, cells)
+    spots = spots.rename(columns={'min_boundary_dist':'raw_metric'})
 
     #Calculate median centroid_dist for each gene in each cell 
     periphery_df = spots.groupby(['cell_id','target_molecule_name','num_cell_spots','num_gene_spots'])['raw_metric'].median().reset_index()
@@ -234,6 +217,129 @@ def spatial_metric_periphery(spots,cells):
 
 
     return metric_df
+
+
+def spatial_metric_periphery_quantile(spots,cells,pts=[0,10,20,30,40,50,70,80,90,100]):
+    """
+    Spatial metric: periphery quantile
+
+    Calculates the median distance between the RNA spot and the nearest cell boundary for each gene
+    Intuition is that genes closer to the periphery will have shorter median distances
+
+    Note, does not use the decorator since the output has multiple columns of metric
+
+    Arguments:
+        - spots: dataframe object where each row is a MERFISH spot with the following columns
+            'cell_id': the id of the cell that contains this spot as a string
+            'target_molecule_name': gene name
+            'global_x': x-coordinate of the spot
+            'global_y': y-coordinate of the spot
+            
+
+        - cells: dataframe object where each row is a MERFISH cell with the following columns
+            'cell_id': the ide of the cell as a string
+            'boundaryX': string of x-coords for the cell boundary like
+                "2097.1362953431903, 2097.1362953431903, 2097.1362953431903, ...."
+            'boundaryY': string of y-coords for the cell boundary like
+                "2097.1362953431903, 2097.1362953431903, 2097.1362953431903, ...."
+
+        - pts: percentiles to use in summarizing min_boundary_dist of gene/cell combination
+
+    Outputs:
+        - metric_df: dataframe object where each row is a unique gene/cell combination. columns:
+            'cell_id': same as from inputs
+            'target_molecule_name': same as from inputs
+            'num_cell_spots': number of total spots in this cell
+            'num_gene_spots': number of spots of the specific gene in this cell
+            'metric_name': always 'periphery_quantile' for this function
+            'pt{}': the min_boundary_dist of given gene/cell at the {} percentile
+            'gene_pt{}': 0 for the gene with the min pt{} in this cell
+    """
+
+    #Remove cells that have too few boundary points
+    #Having 3 commas means 4 points which is min for shapely
+    cells = cells[cells['boundaryX'].str.count(',').gt(3)]
+
+    #Limit the spots to just the shared cell_ids
+    shared_cell_ids = np.intersect1d(spots['cell_id'], cells['cell_id'])
+    spots = spots[spots['cell_id'].isin(shared_cell_ids)]
+    cells = cells[cells['cell_id'].isin(shared_cell_ids)]
+
+    #Calculate num_cell_spots and num_gene_spots
+    spots = calculate_spots_per_cell(spots)
+
+    #Calculate spot to boundary min dist
+    spots = calculate_spot_to_boundary_min_dist(spots, cells) 
+    spots = spots.rename(columns={'min_boundary_dist':'raw_metric'})
+    
+    for pt in pts:
+        spots['pt{}'.format(pt)] = (
+            spots.groupby(['cell_id','target_molecule_name'])
+            ['raw_metric']
+            .transform(lambda x: np.percentile(x,pt))
+        )
+        
+        
+    periphery_df = spots.drop_duplicates(['cell_id','target_molecule_name'])
+    periphery_df['metric_name'] = 'periphery_quantile'
+    
+    for pt in pts:
+        periphery_df['gene_pt{}'.format(pt)] = (
+            periphery_df.groupby('cell_id')
+            ['pt{}'.format(pt)]
+            .transform(
+                lambda x: [(x <= v).sum()/len(x) for v in x]
+            )
+        )
+
+    #Get the output into the standard metric table
+    pt_cols = ['pt{}'.format(pt) for pt in pts]
+    gene_pt_cols = ['gene_pt{}'.format(pt) for pt in pts]
+    cols = [
+       'cell_id', 'target_molecule_name',
+       'num_cell_spots', 'num_gene_spots',
+       'metric_name',
+    ]+pt_cols+gene_pt_cols
+    metric_df = periphery_df[cols]
+
+
+    return metric_df
+
+
+
+def calculate_spot_to_boundary_min_dist(spots, cells):
+    #Remove cells that have too few boundary points
+    #Having 3 commas means 4 points which is min for shapely
+    cells = cells[cells['boundaryX'].str.count(',').gt(3)]
+
+    #Limit the spots to just the shared cell_ids
+    shared_cell_ids = np.intersect1d(spots['cell_id'], cells['cell_id'])
+    spots = spots[spots['cell_id'].isin(shared_cell_ids)]
+    cells = cells[cells['cell_id'].isin(shared_cell_ids)]
+
+    #Create a shapely.poly object for each cell
+    cells['poly'] = cells.apply(lambda r: create_shapely_boundary(r['boundaryX'],r['boundaryY']), axis=1)
+
+    #Add the poly object to each row in spots
+    cell_id_to_poly = cells.set_index('cell_id')['poly']
+    spots['poly'] = spots['cell_id'].map(cell_id_to_poly)
+
+    #Calculate min boundary dists for each spot
+    def helper(poly,px,py):
+        pt = shapely.wkt.loads('POINT({} {})'.format(px,py))
+        return poly.boundary.distance(pt)
+
+    spots['min_boundary_dist'] = (
+        spots.apply(
+            lambda r: helper(
+                r['poly'], 
+                r['global_x'],
+                r['global_y']),
+            axis=1)
+    )
+
+    spots = spots.drop(columns='poly')
+    return spots
 
 
 def create_shapely_boundary(boundaryX,boundaryY):
